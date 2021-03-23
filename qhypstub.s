@@ -7,6 +7,9 @@
  */
 .cpu	cortex-a53
 
+.equ	STATE_AARCH32,	1
+.equ	STATE_AARCH64,	2
+
 /* Saved Program Status Register (EL2) */
 .equ	SPSR_EL2_A,		1 << 8	/* SError interrupt mask */
 .equ	SPSR_EL2_I,		1 << 7	/* IRQ interrupt mask */
@@ -22,10 +25,42 @@
 .equ	CPTR_EL2_RES1,		1 << 13 | 1 << 12 | 1 << 9 | 1 << 8 | 0xff
 
 /*
- * HYP entry point
+ * HYP entry point. This is called by TZ to initialize the CPU EL2 states
+ * on initial boot-up and whenever a CPU core is turned back on after a power
+ * collapse (e.g. because of SMP or CPU idle).
+ *   Parameters: x0 = EL1 entry address, x1 = STATE_AARCH32/STATE_AARCH64
+ *               x3 = Something? Seems to be always zero...
  */
 .global _start
 _start:
+	mov	lr, x0		/* save entry address to link register */
+
+	/*
+	 * Register allocation:
+	 *   x0 = temporary register
+	 *   x1 = STATE_AARCH32/STATE_AARCH64
+	 *   x3 = temporary register
+	 *   lr = bootloader/kernel entry address
+	 */
+	.macro clrregs
+		/* Clear registers used in this function */
+		mov	x0, xzr
+		mov	x1, xzr
+		mov	x2, xzr
+		mov	x3, xzr
+	.endm
+
+	cmp	x1, STATE_AARCH64
+	bne	not_aarch64
+
+	/* Jump to aarch64 directly in EL2! */
+	clrregs
+	ret
+
+not_aarch64:
+	cmp	x1, STATE_AARCH32
+	bne	panic		/* invalid state parameter */
+
 	/* aarch32 EL1 setup */
 	msr	hcr_el2, xzr	/* EL1 is aarch32 */
 	mov	x3, SPSR_EL2_AIF | SPSR_EL2_AARCH32_SVC
@@ -41,7 +76,10 @@ _start:
 	msr	cptr_el2, x3
 	msr	hstr_el2, xzr
 
-	/* Configure (hard-coded) EL1 return address and return! */
-	mov	x0, 0x8f600000
-	msr	elr_el2, x0
+	/* Configure EL1 return address and return! */
+	msr	elr_el2, lr
+	clrregs
 	eret
+
+panic:
+	b	panic
