@@ -7,6 +7,7 @@
  */
 .cpu	cortex-a53
 
+.equ	STATE_INITIAL,	0
 .equ	STATE_AARCH32,	1
 .equ	STATE_AARCH64,	2
 
@@ -39,6 +40,7 @@ _start:
 	 * Register allocation:
 	 *   x0 = temporary register
 	 *   x1 = STATE_AARCH32/STATE_AARCH64
+	 *   x2 = execution_state value
 	 *   x3 = temporary register
 	 *   lr = bootloader/kernel entry address
 	 */
@@ -50,6 +52,19 @@ _start:
 		mov	x3, xzr
 	.endm
 
+	/* First, figure out if this is the initial boot-up */
+	adr	x0, execution_state
+	ldrb	w2, [x0]
+	cbnz	w2, skip_init
+	strb	w1, [x0]	/* set initial execution_state based on x1 */
+
+	/* Bring RPM out of reset */
+	mov	x0, 0x1860000	/* GCC_APSS_MISC */
+	ldr	w3, [x0]
+	and	w3, w3, ~0b1	/* RPM_RESET_REMOVAL */
+	str	w3, [x0]
+
+skip_init:
 	cmp	x1, STATE_AARCH64
 	bne	not_aarch64
 
@@ -83,3 +98,7 @@ not_aarch64:
 
 panic:
 	b	panic
+
+.data
+execution_state:
+	.byte	0

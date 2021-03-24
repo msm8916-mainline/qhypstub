@@ -8,4 +8,5 @@ SECTIONS {
 	. = 0x86400000;
 
 	.text : { *(.text) }
+	.data : { *(.data) }
 }
