@@ -174,8 +174,16 @@ finish_smc_switch_aarch64:
 	/*
 	 * We get here once TZ has switched EL1 to aarch64 execution state
 	 * and EL1 ran into the Instruction Abort.
-	 * Now, simply jump to the entry point directly in EL2!
+	 *
+	 * First, cleanup some EL2 configuration registers. This should not
+	 * be necessary since the next bootloader/kernel/... should re-initialize
+	 * these. However, not clearing HCR_EL2 causes reboots with U-Boot
+	 * at least for some weird reason. I guess it doesn't hurt :)
 	 */
+	msr	hcr_el2, xzr
+	msr	vbar_el2, xzr
+
+	/* Now, simply jump to the entry point directly in EL2! */
 	mrs	lr, elr_el2
 	ret
 
