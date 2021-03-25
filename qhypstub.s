@@ -11,6 +11,9 @@
 .equ	STATE_AARCH32,	1
 .equ	STATE_AARCH64,	2
 
+/* Hypervisor Configuration Register (EL2) */
+.equ	HCR_EL2_VM,	1 << 0		/* enable stage 2 address translation */
+
 /* Saved Program Status Register (EL2) */
 .equ	SPSR_EL2_A,		1 << 8	/* SError interrupt mask */
 .equ	SPSR_EL2_I,		1 << 7	/* IRQ interrupt mask */
@@ -67,12 +70,10 @@ _start:
 	ldr	w3, [x0]
 	and	w3, w3, ~0b1	/* RPM_RESET_REMOVAL */
 	str	w3, [x0]
-	b	not_aarch64	/* FIXME */
 
 skip_init:
-	/* FIXME: Why is this always aarch32 suddenly? */
-	/*cmp	x1, STATE_AARCH64
-	bne	not_aarch64*/
+	cmp	x1, STATE_AARCH64
+	bne	not_aarch64
 
 	/* Jump to aarch64 directly in EL2! */
 	clrregs
@@ -119,29 +120,52 @@ hvc32:
 	mov	w15, 0x2000000	/* SMC32/HVC32 SiP Service Call */
 	movk	w15, 0x10f	/* something like "jump to kernel in aarch64" */
 	cmp	w0, w15
-	beq	hvc32_jump_aarch64
+	beq	smc_switch_aarch64
 	mov	w0, SMCCC_NOT_SUPPORTED
 	eret
 
-hvc32_jump_aarch64:
-	/* Jump to aarch64 in EL2 based on struct el1_system_param in LK scm.h */
-	cmp	w1, 0x12	/* MAKE_SCM_ARGS(0x2, SMC_PARAM_TYPE_BUFFER_READ) */
-	bne	hvc_invalid
-	cmp	w3, 10*8	/* size of struct, x0-x7 + lr * uint64_t */
-	bne	hvc_invalid
+smc_switch_aarch64:
+	/*
+	 * Theoretically we could just jump to the entry point directly here in
+	 * EL2. However, in practice this does not work correctly. It seems like
+	 * TZ/PSCI records if we ever did the SMC call to switch to aarch64 state.
+	 * If we bypass it when booting aarch64 kernels, the other CPU cores
+	 * will be brought up in aarch32 state instead of aarch64 later.
+	 *
+	 * So, we do need to use the SMC call to switch to aarch64.
+	 * Unfortunately, TZ does not involve the hypervisor when switching states.
+	 * It modifies our HCR_EL2 register to enable aarch64, and returns in EL1
+	 * even if we do the SMC call here from EL2.
+	 *
+	 * So, somehow we need to jump back to EL2 immediately after the state
+	 * switch. The way we do this here is by temporarily activating stage 2
+	 * address translation (i.e. the way to protect hypervisor memory).
+	 * We don't bother setting up a valid translation table - the only goal
+	 * is to cause an Instruction Abort immediately after the state switch.
+	 */
 
-	/* Load all registers and jump here directly in EL2! */
-	mov	w8, w2
-	ldp	x0, x1, [x8]
-	ldp	x2, x3, [x8, 1*2*8]
-	ldp	x4, x5, [x8, 2*2*8]
-	ldp	x6, x7, [x8, 3*2*8]
-	ldp	x8, lr, [x8, 4*2*8]
-	ret
+	/* Enable stage 2 address translation */
+	mov	x15, HCR_EL2_VM
+	msr	hcr_el2, x15
 
-hvc_invalid:
-	mov	w0, SMCCC_INVALID_PARAMETER
+	/* Let TZ switch to aarch64 and return to EL1 */
+	smc	0
+
+	/*
+	 * Something went wrong. Maybe parameter validation?
+	 * Disable stage 2 address translation again and return to EL1.
+	 */
+	msr	hcr_el2, xzr
 	eret
+
+finish_smc_switch_aarch64:
+	/*
+	 * We get here once TZ has switched EL1 to aarch64 execution state
+	 * and EL1 ran into the Instruction Abort.
+	 * Now, simply jump to the entry point directly in EL2!
+	 */
+	mrs	lr, elr_el2
+	ret
 
 /* EL2 exception vectors (written to VBAR_EL2) */
 .section .text.vectab
@@ -171,6 +195,10 @@ el2_vector_table:
 	b	panic
 
 	excvec	el1_aarch64_sync
+	mrs	x30, esr_el2
+	lsr	x30, x30, 26	/* shift to exception class */
+	cmp	x30, 0b100000	/* Instruction Abort from lower EL? */
+	beq	finish_smc_switch_aarch64
 	b	panic
 	excvec	el1_aarch64_irq
 	b	panic
