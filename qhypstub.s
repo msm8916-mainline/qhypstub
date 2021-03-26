@@ -12,14 +12,17 @@
 .equ	STATE_AARCH64,	2
 
 /* Hypervisor Configuration Register (EL2) */
+.equ	HCR_EL2_RW,	1 << 31		/* register width, EL1 is aarch64 */
 .equ	HCR_EL2_VM,	1 << 0		/* enable stage 2 address translation */
 
 /* Saved Program Status Register (EL2) */
+.equ	SPSR_EL2_AARCH64_D,	1 << 9	/* debug exception mask (aarch64) */
 .equ	SPSR_EL2_A,		1 << 8	/* SError interrupt mask */
 .equ	SPSR_EL2_I,		1 << 7	/* IRQ interrupt mask */
 .equ	SPSR_EL2_F,		1 << 6	/* FIQ interrupt mask */
 .equ	SPSR_EL2_AIF,		SPSR_EL2_A | SPSR_EL2_I | SPSR_EL2_F
 .equ	SPSR_EL2_AARCH32_SVC,	0b10011		/* aarch32 supervisor mode */
+.equ	SPSR_EL2_AARCH64_EL1H,	0b00101		/* aarch64 EL1h mode */
 
 /* Counter-Timer Hypervisor Control Register (EL2) */
 .equ	CNTHCTL_EL2_EL1PCEN,	1 << 1	/* allow EL0/EL1 timer access */
@@ -64,6 +67,19 @@ _start:
 		mov	x3, xzr
 	.endm
 
+	/*
+	 * Overall, we need to handle 5 different scenarios here... :S
+	 *   Initial boot:
+	 *     1. To aarch64 bootloader/kernel in EL2
+	 *     2. To aarch32 bootloader/kernel in EL1
+	 *   SMP / boot after power collapse:
+	 *     3. aarch64 (EL2)
+	 *     4. aarch32 (EL1)
+	 *     5. aarch64 (EL1) - only if main CPU has booted aarch64 in EL1
+	 *        because the bootloader used the SMC call instead of HVC call
+	 *        for the aarch64 state switch
+	 */
+
 	/* First, figure out if this is the initial boot-up */
 	adr	x0, execution_state
 	ldrb	w2, [x0]
@@ -94,9 +110,28 @@ skip_init:
 	cmp	x1, STATE_AARCH64
 	bne	not_aarch64
 
-	/* Jump to aarch64 directly in EL2! */
+	/*
+	 * Check if we ever did a state switch to aarch64 (either by directly
+	 * jumping to a aarch64 bootloader, or using the HVC call).
+	 * If not, the state switch to aarch64 happened without involving us
+	 * (probably through the SMC call in TZ), which means that the main CPU
+	 * booted in EL1. In that case, we should also boot the other cores in
+	 * EL1 to avoid confusion (e.g. "CPUs started in inconsistent modes"
+	 * warning in Linux).
+	 */
+	cmp	w2, STATE_AARCH64
+	bne	aarch64_el1
+
+	/* Everything seems to run directly in EL2, so jump there directly! */
 	clrregs
 	ret
+
+aarch64_el1:
+	/* aarch64 EL1 setup */
+	mov	x0, HCR_EL2_RW	/* EL1 is aarch64 */
+	msr	hcr_el2, x0
+	mov	x3, SPSR_EL2_AARCH64_D | SPSR_EL2_AIF | SPSR_EL2_AARCH64_EL1H
+	b	prepare_eret
 
 not_aarch64:
 	cmp	x1, STATE_AARCH32
@@ -105,6 +140,8 @@ not_aarch64:
 	/* aarch32 EL1 setup */
 	msr	hcr_el2, xzr	/* EL1 is aarch32 */
 	mov	x3, SPSR_EL2_AIF | SPSR_EL2_AARCH32_SVC
+
+prepare_eret:
 	msr	spsr_el2, x3
 
 	/* Allow EL1 to access timer/counter */
@@ -202,6 +239,12 @@ finish_smc_switch_aarch64:
 	 */
 	msr	hcr_el2, xzr
 	msr	vbar_el2, xzr
+
+	/* Record that aarch64 will run in EL2 from now on */
+	adr	x30, execution_state
+	mov	w29, STATE_AARCH64
+	strb	w29, [x30]
+	mov	w29, wzr
 
 	/* Now, simply jump to the entry point directly in EL2! */
 	mrs	lr, elr_el2
