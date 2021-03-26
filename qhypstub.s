@@ -76,6 +76,20 @@ _start:
 	and	w3, w3, ~0b1	/* RPM_RESET_REMOVAL */
 	str	w3, [x0]
 
+	/* Set exception vector table for initial execution state switch */
+	adr	x0, el2_vector_table
+	msr	vbar_el2, x0
+
+	/*
+	 * Special case for loading initial bootloader in aarch64 state.
+	 * There is a bug in the TZ PSCI implementation that starts all other
+	 * CPU cores in aarch32 state unless we invoke its SMC call to switch
+	 * to aarch64 state. So we need to do that here. See hvc32_jump_aarch64.
+	 */
+	cmp	x1, STATE_AARCH64
+	beq	bootup_smc_switch_aarch64
+	b	not_aarch64
+
 skip_init:
 	cmp	x1, STATE_AARCH64
 	bne	not_aarch64
@@ -103,10 +117,6 @@ not_aarch64:
 	msr	cptr_el2, x3
 	msr	hstr_el2, xzr
 
-	/* Set exception vector table for initial execution state switch */
-	adr	x0, el2_vector_table
-	msr	vbar_el2, x0
-
 	/* Configure EL1 return address and return! */
 	msr	elr_el2, lr
 	clrregs
@@ -128,6 +138,16 @@ hvc32:
 	beq	smc_switch_aarch64
 	mov	w0, SMCCC_NOT_SUPPORTED
 	eret
+
+bootup_smc_switch_aarch64:
+	/* Set up SMC call to make TZ aware of the state switch to aarch64 */
+	mov	x0, 0x2000000	/* SMC32/HVC32 SiP Service Call */
+	movk	x0, 0x10f	/* something like "jump to kernel in aarch64" */
+	mov	x1, 0x12	/* MAKE_SCM_ARGS(0x2, SMC_PARAM_TYPE_BUFFER_READ) */
+	adr	x2, scm_jump_aarch64_args
+	mov	x3, scm_jump_aarch64_args_end - scm_jump_aarch64_args
+	str	lr, [x2, scm_jump_aarch64_args_end - scm_jump_aarch64_args - 8]
+	/* Fallthrough */
 
 smc_switch_aarch64:
 	/*
@@ -245,3 +265,8 @@ el2_vector_table:
 .data
 execution_state:
 	.byte	0
+
+	.align	3	/* 64-bit alignment */
+scm_jump_aarch64_args:	/* struct el1_system_param in lk scm.h */
+	.quad	0, 0, 0, 0, 0, 0, 0, 0, 0, 0	/* el1_x0-x8,elr */
+scm_jump_aarch64_args_end:
