@@ -36,6 +36,11 @@
 	/* 32-bit physical/translated address, 4 KB granule, start at level 1 */
 .equ	VTCR_EL2_32BIT_4KB_L1,	0 << 16 | 0 << 14 | 1 << 6 | 32
 
+/* System Control Register (EL1) */
+.equ	SCTLR_EL1_AARCH32_RES1_MSB,	1 << 23 | 1 << 22
+.equ	SCTLR_EL1_AARCH32_RES1_LSB,	1 << 11 | 1 << 4 | 1 << 3
+.equ	SCTLR_EL1_CP15BEN,		1 << 5	/* enable CP15 barrier */
+
 /* SMC Calling Convention return codes */
 .equ	SMCCC_NOT_SUPPORTED,		-1
 .equ	SMCCC_INVALID_PARAMETER,	-3
@@ -137,7 +142,19 @@ not_aarch64:
 	cmp	x1, STATE_AARCH32
 	bne	panic		/* invalid state parameter */
 
-	/* aarch32 EL1 setup */
+	/*
+	 * aarch32 EL1 setup
+	 *
+	 * First, initialize SCTLR_EL1. On aarch64 this should usually happen by
+	 * the bootloader or kernel in EL1 because the reset value is generally
+	 * "architecturally UNKNOWN". However, for aarch32 there is a clear reset
+	 * value. At least Linux depends on having CP15BEN set, otherwise it will
+	 * crash very early during a CP15 barrier shortly before enabling the MMU.
+	 */
+	mov	x0, SCTLR_EL1_AARCH32_RES1_MSB
+	movk	x0, SCTLR_EL1_AARCH32_RES1_LSB | SCTLR_EL1_CP15BEN
+	msr	sctlr_el1, x0
+
 	msr	hcr_el2, xzr	/* EL1 is aarch32 */
 	mov	x3, SPSR_EL2_AIF | SPSR_EL2_AARCH32_SVC
 
