@@ -28,6 +28,11 @@
 /* Architectural Feature Trap Register (EL2) */
 .equ	CPTR_EL2_RES1,		1 << 13 | 1 << 12 | 1 << 9 | 1 << 8 | 0xff
 
+/* Virtualization Translation Control Register */
+.equ	VTCR_EL2_RES1,		1 << 31
+	/* 32-bit physical/translated address, 4 KB granule, start at level 1 */
+.equ	VTCR_EL2_32BIT_4KB_L1,	0 << 16 | 0 << 14 | 1 << 6 | 32
+
 /* SMC Calling Convention return codes */
 .equ	SMCCC_NOT_SUPPORTED,		-1
 .equ	SMCCC_INVALID_PARAMETER,	-3
@@ -143,6 +148,13 @@ smc_switch_aarch64:
 	 * We don't bother setting up a valid translation table - the only goal
 	 * is to cause an Instruction Abort immediately after the state switch.
 	 */
+
+	/* Setup invalid address translation table configuration */
+	mov	x15, VTCR_EL2_RES1
+	movk	x15, VTCR_EL2_32BIT_4KB_L1
+	msr	vtcr_el2, x15
+	mov	x15, 1 << 32	/* >= 2^32 to cause Address Size Fault */
+	msr	vttbr_el2, x15
 
 	/* Enable stage 2 address translation */
 	mov	x15, HCR_EL2_VM
