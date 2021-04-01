@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
+ * qhypstub - open source "hyp" firmware stub for Qualcomm MSM8916/APQ8016
  * Copyright (C) 2021 Stephan Gerhold
  *
  * Based on the "ARM Architecture Reference Manual for Armv8-A"
