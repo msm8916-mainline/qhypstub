@@ -77,6 +77,15 @@ $ ./qtestsign.py hyp qhypstub.elf
 
 **Tip:** If you clone [qtestsign] directly into your [qhypstub] clone, running `make` will also automatically sign the binary!
 
+## Security
+[qhypstub] is not a hypervisor and does therefore not attempt to prevent lower
+exception levels (e.g. EL1 or EL0) to access its memory. Instead, the kernel
+and/or hypervisor that you load MUST protect 4 KiB of memory, starting at
+`0x86400000` on MSM8916/APQ8016, usually by marking it as reserved memory.
+
+**Note:** On [Linux] this happens automatically because there is already 1 MiB
+of memory reserved for Qualcomm's original `hyp` firmware.
+
 ## Technical overview
 This section focuses on a technical overview of [qhypstub] and the functionality implemented
 by the `hyp` firmware on MSM8916/APQ8016. For a general introduction for exception levels
