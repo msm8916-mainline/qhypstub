@@ -78,6 +78,56 @@ $ ./qtestsign.py hyp qhypstub.elf
 **Tip:** If you clone [qtestsign] directly into your [qhypstub] clone, running `make` will also automatically sign the binary!
 
 ## Technical overview
+This section focuses on a technical overview of [qhypstub] and the functionality implemented
+by the `hyp` firmware on MSM8916/APQ8016. For a general introduction for exception levels
+(EL1/EL2/EL3 etc) and execution states, the following documentation may be helpful:
+
+  - [Learn the architecture: AArch64 Exception model](https://developer.arm.com/documentation/102412/latest)
+  - [Learn the architecture: AArch64 Instruction Set Architecture](https://developer.arm.com/documentation/102374/latest)
+  - [Learn the architecture: AArch64 Virtualization](https://developer.arm.com/documentation/102142/latest)
+  - [Learn the architecture: AArch64 memory management](https://developer.arm.com/documentation/101811/latest)
+  - [ARM Architecture Reference Manual for Armv8-A]
+
+Given how well [qhypstub] is working, it seems like the `hyp` firmware has only
+the following functionality on MSM8916/APQ8016:
+
+  - Block EL2 to make sure it cannot be used (Why?)
+  - Bring RPM out of reset
+  - Enable stage 2 address translation to prevent EL1 from accessing EL2 memory(?)
+    - Accessing hypervisor memory (1 MiB starting at 0x86400000) works with [qhypstub],
+      but not with the original Qualcomm firmware.
+
+It is very well possible that the `hyp` firmware implements more functionality
+on other (e.g. newer) Qualcomm SoCs. Some SoCs even seem to implement PSCI there.
+So, **if you want to port [qhypstub] to other SoCs** you will need to investigate
+which functionality must be replicated, and at least adjust the following constants:
+
+  - `hyp` base address in `qhypstub.ld` (`0x86400000` on MSM8916/APQ8016)
+  - RPM reset address in `qhypstub.s` (`0x01860000` on MSM8916/APQ8016)
+
+For legal reasons I recommend to avoid looking at the disassembly of the original
+`hyp` firmware. Actually, [qhypstub] can be derived fully only based on trial and error,
+which is shown in the commit log. In fact, if you have a primary aarch64 bootloader
+(e.g. [U-Boot]), a very simple `hyp` firmware that ends up in [U-Boot] would be:
+
+```assembly
+.global _start
+_start:
+	mov	lr, 0x8f600000
+        ret
+```
+
+where `0x8f600000` is the entry address of [U-Boot] (the firmware flashed to the
+`aboot` partition). There is no need to load the bootloader from the `hyp` firmware,
+since this already happens in SBL1 and the `hyp` firmware just gets an address to
+jump to. With this as a base, you can dump registers (= parameters) to memory,
+light up a GPIO LED or something like this and investigate further.
+
+Making it work properly is _a bit more complicated_ since it also gets called after
+CPUs are powered back on (either on initial boot or after CPUidle). See `qhypstub.s`
+and the commit log for more details.
+
+### Boot flow
 TBD
 
 ## License
