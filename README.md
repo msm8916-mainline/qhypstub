@@ -40,14 +40,20 @@ and therefore supports all of the following usage scenarios:
   - OS started in aarch32 EL1 (e.g. original 32-bit Linux 3.10 kernel from Qualcomm)
 
 ## Installation
+**WARNING:** The `hyp` firmware runs before the bootloader that provides the Fastboot interface. Be prepared to recover
+your board using other methods (e.g. EDL) in case of trouble. DO NOT INSTALL IT IF YOU DO NOT KNOW HOW TO RECOVER YOUR BOARD!
+
 After [building](#building) qhypstub and signing it, it is simply flashed to the `hyp` partition, e.g. using Fastboot:
 
 ```
 $ fastboot flash hyp qhypstub-test-signed.mbn
 ```
 
-**WARNING:** The `hyp` firmware runs before the bootloader that provides the Fastboot interface. Be prepared to recover
-your board using other methods (e.g. EDL) in case of trouble. DO NOT INSTALL IT IF YOU DO NOT KNOW HOW TO RECOVER YOUR BOARD!
+**WARNING:** `qhypstub-test-signed.mbn` **works only on devices with secure boot disabled**.
+Firmware secure boot is separate from the secure boot e.g. in Android bootloaders
+(for flashing custom Android boot images or kernels). Unfortunately, it is enabled
+on most production devices and (theoretically) cannot be unlocked. In that case,
+[qhypstub] cannot easily be used at the moment. Sorry.
 
 ## Building
 [qhypstub] can be easily built with just an assembler and a linker, through the [Makefile](/Makefile):
