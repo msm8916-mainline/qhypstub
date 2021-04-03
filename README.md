@@ -137,7 +137,100 @@ CPUs are powered back on (either on initial boot or after CPUidle). See `qhypstu
 and the commit log for more details.
 
 ### Boot flow
-TBD
+To the best of my knowledge, the boot flow with the original firmware from Qualcomm
+looks approximately like this (somewhat simplified of course):
+
+![Boot flow with original Qualcomm firmware](diagrams/qhypstub-original.svg)
+
+SBL runs in aarch32 state, loads and authenticates TZ/HYP/aboot and finally does
+a CPU warm reset to switch to TZ in aarch64 state. TZ does some initialization and
+then returns to the hypervisor (`hyp` firmware) in EL2. The `hyp` firmware gets the
+entry address and execution state (aarch64 or aarch32) as parameters, does the EL2
+initialization and then returns to the bootloader in EL1 (switching to aarch32 if
+necessary).
+
+[LK (Little Kernel)] runs in aarch32 mode and loads Android boot images from the eMMC.
+But actually we want to boot aarch64 kernels (e.g. Linux). Since execution states can
+only change when switching exception levels, LK needs to ask EL3 or EL2 to switch EL1
+back to aarch64 state. For Qualcomm's original firmware this happens using a SMC
+(Secure Monitor Call) to TZ.
+
+Later, the loaded kernel might ask TZ (again with a SMC) to boot the other CPU cores.
+Since the other CPU core is not initialized yet, basically the entire flow repeats again,
+except that now TZ instructs the `hyp` firmware to boot directly in aarch64 state to the
+entry point specified by the kernel. The same repeats over and over again whenever a CPU
+was power-collapsed (e.g. because of CPUidle).
+
+#### Booting in EL2
+With [qhypstub], we want to start a hypervisor/kernel directly in EL2, so that we can make
+proper use of the virtualization features built into the CPU. How do we do that?
+
+We cannot boot [LK (Little Kernel)] in EL2 because the execution state switch to aarch32
+can only happen when switching to a lower exception level (here: EL2 -> EL1). Also, LK
+probably would not know how to deal with running at a higher exception level.
+
+Instead, it is tempting to simply bypass TZ for the execution state switch entirely,
+and implement a HVC (Hypervisor Call) that would switch to a aarch64 hypervisor/kernel
+directly in EL2. I did this in [commit 75c75aa ("Implement HVC call to switch execution state to aarch64 in EL2")](https://github.com/msm8916-mainline/qhypstub/commit/75c75aa325f4f184c830bebfa8ca2d91eeb649cd).
+It looks approximately like this:
+
+![Boot flow with direct jump from qhypstub (broken)](diagrams/qhypstub-broken.svg)
+
+[LK (Little Kernel)] is modified to try a HVC to jump to a aarch64 kernel before doing the SMC
+(see [Try jumping to aarch64 kernel in EL2 using hypervisor call]), and then [qhypstub] simply
+jumps to the entry point of the kernel directly in EL2.
+
+This would be really nice and simple (especially when booting [U-Boot] directly as aarch64
+bootloader!), but unfortunately it does not work properly, as you can see for CPU1. As mentioned,
+TZ asks the `hyp` firmware to jump to an entry point in aarch32 or aarch64 state
+(after EL2 initialization). For some reason, when implementing this approach, TZ suddenly
+instructs the `hyp` firmware to jump to all entry points in aarch32 state, even though
+we booted the kernel in aarch64.
+
+At least on DragonBoard 410c, booting the other CPU cores happens using the standard
+[Power State Coordination Interface (PSCI)]. This ends up as a standardized SMC to the
+proprietary TZ firmware as shown in the diagram. (Unfortunately, Android devices based on MSM8916
+implement some custom approach instead, but the idea is similar...)
+
+It looks like there is a bug in the PSCI implementation within TZ that causes all other CPU cores
+to be started in aarch32 state, unless we invoke its SMC for the initial state switch to aarch64
+(shown in the very first diagram!). Of course, since we control [qhypstub] we could simply ignore
+if TZ tells us to jump to some entry point in aarch32 state, and always assume aarch64. But overall,
+the TZ implementation is proprietary and there is no way to tell if not making TZ aware of the state
+switch causes other problems later on.
+
+#### Exception level ping-pong
+To avoid the bug entirely, we need to invoke the SMC for the state switch in TZ
+at least once. This will make TZ aware that EL1 will be running in aarch64 execution state
+from then on. Unfortunately, TZ does not involve the hypervisor when doing the state switch.
+Even if we invoke the SMC from [qhypstub] (in EL2), TZ will attempt to return in EL1.
+Oh well. :(
+
+What we need is some kind of "exception level ping-pong", a way to jump back to EL2
+immediately after TZ returns to EL1. There are many ways to implement this, we could
+have TZ jump to some custom code in EL1, that would do a HVC back into EL2. But this
+requires to save some registers etc. As a "hypervisor" in EL2, there must be some way
+to prevent EL1 from running, right?
+
+The solution for this implemented for [qhypstub] in
+[commit fb55f1e ("Use TZ SMC call to do aarch32 -> aarch64 execution state switch")](https://github.com/msm8916-mainline/qhypstub/commit/fb55f1e3821c991d1e7215a10f9ac9b00cf502f1)
+is to temporarily enable _stage 2 address translation_ immediately before starting the SMC.
+Stage 2 address translation is the mechanism for the hypervisor to provide each virtual machine
+with its own view of memory. In this case, it is just used as a dummy mechanism to effectively
+forbid EL1 to access **any** memory.
+
+This means that as soon as TZ returns to EL1, the CPU will immediately run into an
+_Instruction Abort_ when trying to fetch the first instruction. This will force execution
+back into EL2. Then, we just need to handle that exception in [qhypstub] and jump to the
+kernel directly in EL2. All in all, the boot flow for [qhypstub] looks approximately like this:
+
+![Boot flow with qhypstub](diagrams/qhypstub.svg)
+
+Because of the "PSCI bug", the boot flow when using [U-Boot] as primary aarch64 bootloader
+actually looks very similar, except that the HVC is missing and instead the SMC is started
+directly in [qhypstub], before starting any bootloader.
+
+For more information about [qhypstub], take a look at the (quite detailed) commit log. :)
 
 ## License
 [qhypstub] is licensed under the [GNU General Public License, version 2]. It is mostly based on trial and error,
@@ -153,3 +246,4 @@ to initialize EL2/EL1. Also, similar code can be found in [Linux] and [U-Boot].
 [qtestsign]: https://github.com/msm8916-mainline/qtestsign
 [GNU General Public License, version 2]: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 [ARM Architecture Reference Manual for Armv8-A]: https://developer.arm.com/documentation/ddi0487/latest/
+[Power State Coordination Interface (PSCI)]: https://developer.arm.com/architectures/system-architectures/software-standards/psci
