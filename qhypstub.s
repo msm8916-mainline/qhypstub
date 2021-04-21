@@ -331,3 +331,6 @@ execution_state:
 scm_jump_aarch64_args:	/* struct el1_system_param in lk scm.h */
 	.quad	0, 0, 0, 0, 0, 0, 0, 0, 0, 0	/* el1_x0-x8,elr */
 scm_jump_aarch64_args_end:
+
+.align	3
+.ascii	"qhypstub"
