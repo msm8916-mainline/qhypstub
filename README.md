@@ -38,6 +38,7 @@ possible to load custom kernels in EL1. In other words, [qhypstub] can be used
 on almost all devices based on the following Qualcomm SoCs:
 
   - Snapdragon 410 (MSM8916/APQ8016)
+  - Snapdragon 615 (MSM8939)
 
 It is designed to be a true drop-in replacement for the original `hyp` firmware,
 and therefore supports all of the following usage scenarios:
@@ -70,7 +71,7 @@ on most production devices and (theoretically) cannot be unlocked. In that case,
 into an Android boot image. This makes it easy to load it even on devices with enabled
 secure boot (where the original bootloader (`aboot`) can not easily be replaced).
 
-[lk2nd] supports a large number of devices based on MSM8916. It also contains
+[lk2nd] supports a large number of devices based on MSM8916/MSM8939. It also contains
 an implementation that abuses missing validation in some SCM/SMC calls of Qualcomm's
 TZ firmware to load [qhypstub] at runtime. To load [qhypstub] via [lk2nd], use:
 
