@@ -21,14 +21,23 @@ disadvantages (i.e. features broken when using qhypstub because it is missing
 some functionality). I was not able to find any broken functionality so far.
 
 ## Supported devices
-For now, [qhypstub] works only on MSM8916/APQ8016 devices that have **secure boot disabled**.
+[qhypstub] is primarily intended for MSM8916/APQ8016 devices that have **secure boot disabled**.
 It has been successfully tested on the following devices:
 
   - DragonBoard 410c (db410c/apq8016-sbc)
   - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
-  - Xiaomi Redmi 2 (wt88047)
-  - Alcatel Idol 3 (4.7) (idol347)
+  - Huawei Ascend G7 (huawei-g7)
+  - Xiaomi Redmi 2 (wingtech-wt88047)
+  - Alcatel Idol 3 (4.7) (alcatel-idol347)
     - **Note:** Only some hardware revisions have secure boot disabled.
+
+However, further research has shown that missing validation in Qualcomm's TZ firmware
+can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
+load [qhypstub] even on devices with enabled **secure boot**, provided that it is
+possible to load custom kernels in EL1. In other words, [qhypstub] can be used
+on almost all devices based on the following Qualcomm SoCs:
+
+  - Snapdragon 410 (MSM8916/APQ8016)
 
 It is designed to be a true drop-in replacement for the original `hyp` firmware,
 and therefore supports all of the following usage scenarios:
@@ -40,6 +49,7 @@ and therefore supports all of the following usage scenarios:
   - OS started in aarch32 EL1 (e.g. original 32-bit Linux 3.10 kernel from Qualcomm)
 
 ## Installation
+### Devices without secure boot
 **WARNING:** The `hyp` firmware runs before the bootloader that provides the Fastboot interface. Be prepared to recover
 your board using other methods (e.g. EDL) in case of trouble. DO NOT INSTALL IT IF YOU DO NOT KNOW HOW TO RECOVER YOUR BOARD!
 
@@ -54,6 +64,33 @@ Firmware secure boot is separate from the secure boot e.g. in Android bootloader
 (for flashing custom Android boot images or kernels). Unfortunately, it is enabled
 on most production devices and (theoretically) cannot be unlocked. In that case,
 [qhypstub] cannot easily be used at the moment. Sorry.
+
+### Devices with secure boot
+[lk2nd] is a fork of Qualcomm's open-source [LK (Little Kernel)] that can be packaged
+into an Android boot image. This makes it easy to load it even on devices with enabled
+secure boot (where the original bootloader (`aboot`) can not easily be replaced).
+
+[lk2nd] supports a large number of devices based on MSM8916. It also contains
+an implementation that abuses missing validation in some SCM/SMC calls of Qualcomm's
+TZ firmware to load [qhypstub] at runtime. To load [qhypstub] via [lk2nd], use:
+
+```
+$ fastboot flash qhypstub qhypstub.bin
+```
+
+**Note:** In this case, the binary version (`qhypstub.bin`) is flashed to a "virtual"
+`qhypstub` partition within [lk2nd]. DO NOT FLASH `qhypstub.bin` to the `hyp` partition!
+
+After reboot, [lk2nd] will try to replace the original `hyp` firmware with [qhypstub]
+at runtime. To disable [qhypstub] again, use:
+
+```
+$ fastboot erase qhypstub
+```
+
+Restoring a stock boot image will erase lk2nd along with the flashed `qhypstub` firmware.
+
+For a short technical overview, see [Loading qhypstub at runtime](#loading-qhypstub-at-runtime).
 
 ## Building
 [qhypstub] can be easily built with just an assembler and a linker, through the [Makefile](/Makefile):
@@ -232,6 +269,22 @@ directly in [qhypstub], before starting any bootloader.
 
 For more information about [qhypstub], take a look at the (quite detailed) commit log. :)
 
+### Loading [qhypstub] at runtime
+On the Black Hat USA 2017 conference, [Blue Pill for Your Phone] showed that the TZ firmware
+on many older Qualcomm SoCs is missing checks for HYP memory in SCM/SMC calls. This makes it
+possible to abuse some selected SCM calls to:
+
+  - Zero out 4 consecutive bytes in HYP memory, or
+  - Overwrite arbitrary amount of bytes in HYP memory with random data (PRNG).
+
+This again can be used to corrupt boundary checks in Qualcomm's `hyp` firmware
+which then allows mapping the entire HYP memory into EL1. Finally, [qhypstub]
+is just copied into HYP memory region and will be used for all following CPU
+warm boots (e.g. after CPUidle).
+
+This was implemented independently by TravMurav in [lk2nd]:
+https://github.com/msm8916-mainline/lk2nd/commit/4562184e245f0fdc429fd13600187090eed3e20d
+
 ## License
 [qhypstub] is licensed under the [GNU General Public License, version 2]. It is mostly based on trial and error,
 assembling it step by step until most things were working (see commit log). Since the Cortex-A53 is a standard
@@ -242,6 +295,8 @@ to initialize EL2/EL1. Also, similar code can be found in [Linux] and [U-Boot].
 [Linux]: https://www.kernel.org
 [LK (Little Kernel)]: https://git.linaro.org/landing-teams/working/qualcomm/lk.git
 [U-Boot]: https://www.denx.de/wiki/U-Boot
+[lk2nd]: https://github.com/msm8916-mainline/lk2nd
+[Blue Pill for Your Phone]: https://www.blackhat.com/docs/us-17/wednesday/us-17-Bazhaniuk-BluePill-For-Your-Phone.pdf
 [Try jumping to aarch64 kernel in EL2 using hypervisor call]: https://github.com/msm8916-mainline/lk2nd/commit/8d840ad94c60f1f5ab0a95e886839454e03d8b86.patch
 [qtestsign]: https://github.com/msm8916-mainline/qtestsign
 [GNU General Public License, version 2]: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
