@@ -1,10 +1,18 @@
 # qhypstub
-[qhypstub] is an open-source `hyp` firmware stub for Qualcomm MSM8916/APQ8016
-that allows using the virtualization functionality built into the ARM Cortex-A53
-CPU cores. Unlike the original (proprietary) `hyp` firmware from Qualcomm,
-it allows booting Linux/KVM or other hypervisors in EL2. **As a stub, it does not
-implement any hypervisor functionality**, it just "bridges the gap" to easily allow
-using other hypervisors like KVM in Linux.
+[qhypstub] is a simple, open-source `hyp` firmware replacement for some Qualcomm SoCs
+that allows using the virtualization functionality built into the ARM CPU cores.
+Unlike the original (proprietary) `hyp` firmware from Qualcomm, it allows booting
+Linux/KVM or other hypervisors in EL2. Note that it **does not implement any
+hypervisor functionality**, it is just a _stub_ to "bridge the gap" between
+the Qualcomm firmware and other hypervisors like KVM in Linux.
+
+The following Qualcomm SoCs are known to work so far:
+
+  - Snapdragon 410 (MSM8916/APQ8016)
+  - Snapdragon 615 (MSM8939)
+
+The same or similar approaches could likely work for many more similar SoCs from
+Qualcomm (assuming the devices actually allow using custom firmware).
 
 Overall, it has the following advantages compared to the original firmware from Qualcomm:
 - Boot [Linux]/KVM or other operating systems in EL2 to enable virtualization functionality
@@ -21,8 +29,8 @@ disadvantages (i.e. features broken when using qhypstub because it is missing
 some functionality). I was not able to find any broken functionality so far.
 
 ## Supported devices
-[qhypstub] is primarily intended for MSM8916/APQ8016 devices that have **secure boot disabled**.
-It has been successfully tested on the following devices:
+[qhypstub] is primarily intended for devices that have **secure boot disabled**.
+It has been successfully tested on the following devices (all based on MSM8916):
 
   - DragonBoard 410c (db410c/apq8016-sbc)
   - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
@@ -33,9 +41,9 @@ It has been successfully tested on the following devices:
 
 However, further research has shown that missing validation in Qualcomm's TZ firmware
 can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
-load [qhypstub] even on devices with enabled **secure boot**, provided that it is
-possible to load custom kernels in EL1. In other words, [qhypstub] can be used
-on almost all devices based on the following Qualcomm SoCs:
+load [qhypstub] even on devices with **enabled secure boot**, provided that it is
+possible to load custom kernels in EL1. So far it seems that this approach can be
+successfully used on almost **all devices** based on one of the following Qualcomm SoCs:
 
   - Snapdragon 410 (MSM8916/APQ8016)
   - Snapdragon 615 (MSM8939)
@@ -64,7 +72,7 @@ $ fastboot flash hyp qhypstub-test-signed.mbn
 Firmware secure boot is separate from the secure boot e.g. in Android bootloaders
 (for flashing custom Android boot images or kernels). Unfortunately, it is enabled
 on most production devices and (theoretically) cannot be unlocked. In that case,
-[qhypstub] cannot easily be used at the moment. Sorry.
+flashing [qhypstub] to the `hyp` partition will prevent your device from booting!
 
 ### Devices with secure boot
 [lk2nd] is a fork of Qualcomm's open-source [LK (Little Kernel)] that can be packaged
@@ -119,14 +127,14 @@ $ ./qtestsign.py hyp qhypstub.elf
 [qhypstub] is not a hypervisor and does therefore not attempt to prevent lower
 exception levels (e.g. EL1 or EL0) to access its memory. Instead, the kernel
 and/or hypervisor that you load MUST protect 4 KiB of memory, starting at
-`0x86400000` on MSM8916/APQ8016, usually by marking it as reserved memory.
+`0x86400000`, usually by marking it as reserved memory.
 
 **Note:** On [Linux] this happens automatically because there is already 1 MiB
 of memory reserved for Qualcomm's original `hyp` firmware.
 
 ## Technical overview
 This section focuses on a technical overview of [qhypstub] and the functionality implemented
-by the `hyp` firmware on MSM8916/APQ8016. For a general introduction for exception levels
+by the `hyp` firmware on MSM8916. For a general introduction for exception levels
 (EL1/EL2/EL3 etc) and execution states, the following documentation may be helpful:
 
   - [Learn the architecture: AArch64 Exception model](https://developer.arm.com/documentation/102412/latest)
@@ -136,7 +144,7 @@ by the `hyp` firmware on MSM8916/APQ8016. For a general introduction for excepti
   - [ARM Architecture Reference Manual for Armv8-A]
 
 Given how well [qhypstub] is working, it seems like the `hyp` firmware has only
-the following functionality on MSM8916/APQ8016:
+the following functionality on MSM8916:
 
   - Block EL2 to make sure it cannot be used (Why?)
   - Bring RPM out of reset
@@ -149,8 +157,8 @@ on other (e.g. newer) Qualcomm SoCs. Some SoCs even seem to implement PSCI there
 So, **if you want to port [qhypstub] to other SoCs** you will need to investigate
 which functionality must be replicated, and at least adjust the following constants:
 
-  - `hyp` base address in `qhypstub.ld` (`0x86400000` on MSM8916/APQ8016)
-  - RPM reset address in `qhypstub.s` (`0x01860000` on MSM8916/APQ8016)
+  - `hyp` base address in `qhypstub.ld` (`0x86400000` on MSM8916)
+  - RPM reset address in `qhypstub.s` (`0x01860000` on MSM8916)
 
 For legal reasons I recommend to avoid looking at the disassembly of the original
 `hyp` firmware. Actually, [qhypstub] can be derived fully only based on trial and error,
