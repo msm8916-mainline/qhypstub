@@ -169,7 +169,7 @@ which is shown in the commit log. In fact, if you have a primary aarch64 bootloa
 .global _start
 _start:
 	mov	lr, 0x8f600000
-        ret
+	ret
 ```
 
 where `0x8f600000` is the entry address of [U-Boot] (the firmware flashed to the
