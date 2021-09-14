@@ -9,6 +9,7 @@ SECTIONS {
 
 	/* Keep .data before exception vector table to make use of the padding */
 	.text : { *(.text) }
+	.rodata : { *(.rodata) }
 	.data : { *(.data) }
 
 	/* Exception vector table must be aligned to 0x800 */
