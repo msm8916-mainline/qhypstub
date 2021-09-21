@@ -43,6 +43,7 @@
 .equ	SCTLR_EL1_CP15BEN,		1 << 5	/* enable CP15 barrier */
 
 /* SMC Calling Convention return codes */
+.equ	SMCCC_SUCCESS,			 0
 .equ	SMCCC_NOT_SUPPORTED,		-1
 .equ	SMCCC_INVALID_PARAMETER,	-3
 
@@ -191,6 +192,12 @@ hvc32:
 	movk	w15, 0x10f	/* something like "jump to kernel in aarch64" */
 	cmp	w0, w15
 	beq	smc_switch_aarch64
+
+	mov	w15, 0x86000000	/* SMC32/HVC32 Vendor Specific Hypervisor Call */
+	movk	w15, 0x4242	/* Magic to get/set execution state */
+	cmp	w0, w15
+	beq	hvc_execution_state
+
 	mov	w0, SMCCC_NOT_SUPPORTED
 	eret
 
@@ -267,6 +274,36 @@ finish_smc_switch_aarch64:
 	/* Now, simply jump to the entry point directly in EL2! */
 	mrs	lr, elr_el2
 	ret
+
+/*
+ * The 0x86004242 HVC exists for some special cases where it is needed to
+ * override the execution state in qhypstub, which is necessary with certain
+ * boot flow changes. Usage:
+ *     w0 = 0x86004242
+ *     w1 = 0 to get current execution state returned in w1
+ *  or w1 = STATE_AARCH32/STATE_AARCH64
+ */
+hvc_execution_state:
+	cbnz	w1, hvc_set_execution_state
+	/* Return current execution state */
+	ldr	w1, execution_state
+	mov	x0, SMCCC_SUCCESS
+	eret
+
+hvc_set_execution_state:
+	/* Validate execution state parameter */
+	mov	x15, STATE_AARCH64
+	cmp	w1, w15
+	bhi	smc_invalid
+
+	adr	x15, execution_state
+	str	w1, [x15]
+	mov	x0, SMCCC_SUCCESS
+	eret
+
+smc_invalid:
+	mov	x0, SMCCC_INVALID_PARAMETER
+	eret
 
 /* EL2 exception vectors (written to VBAR_EL2) */
 .section .text.vectab
