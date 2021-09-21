@@ -88,9 +88,9 @@ _start:
 
 	/* First, figure out if this is the initial boot-up */
 	adr	x0, execution_state
-	ldrb	w2, [x0]
+	ldr	w2, [x0]
 	cbnz	w2, skip_init
-	strb	w1, [x0]	/* set initial execution_state based on x1 */
+	str	w1, [x0]	/* set initial execution_state based on x1 */
 
 	/* Bring RPM out of reset */
 	mov	x0, 0x1860000	/* GCC_APSS_MISC */
@@ -261,7 +261,7 @@ finish_smc_switch_aarch64:
 	/* Record that aarch64 will run in EL2 from now on */
 	adr	x30, execution_state
 	mov	w29, STATE_AARCH64
-	strb	w29, [x30]
+	str	w29, [x30]
 	mov	w29, wzr
 
 	/* Now, simply jump to the entry point directly in EL2! */
@@ -325,7 +325,7 @@ el2_vector_table:
 
 .data
 execution_state:
-	.byte	0
+	.word	0
 
 	.align	3	/* 64-bit alignment */
 scm_jump_aarch64_args:	/* struct el1_system_param in lk scm.h */
