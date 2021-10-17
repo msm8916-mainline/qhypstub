@@ -37,6 +37,7 @@ It has been successfully tested on the following devices (all based on MSM8916):
   - Huawei Ascend G7 (huawei-g7)
   - Xiaomi Redmi 2 (wingtech-wt88047)
   - Alcatel Idol 3 (4.7) (alcatel-idol347)
+  - Honor 5X (kiwi)
     - **Note:** Only some hardware revisions have secure boot disabled.
 
 However, further research has shown that missing validation in Qualcomm's TZ firmware
