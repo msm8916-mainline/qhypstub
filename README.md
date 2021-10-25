@@ -28,16 +28,21 @@ until most things were working (see commit log) - it is hard to say if there are
 disadvantages (i.e. features broken when using qhypstub because it is missing
 some functionality). I was not able to find any broken functionality so far.
 
-## Supported devices
+## Tested devices
 [qhypstub] is primarily intended for devices that have **secure boot disabled**.
-It has been successfully tested on the following devices (all based on MSM8916):
+It has been successfully tested on the following devices:
 
+**Snapdragon 410 (MSM8916/APQ8016):**
   - DragonBoard 410c (db410c/apq8016-sbc)
-  - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
-  - Huawei Ascend G7 (huawei-g7)
-  - Xiaomi Redmi 2 (wingtech-wt88047)
   - Alcatel Idol 3 (4.7) (alcatel-idol347)
     - **Note:** Only some hardware revisions have secure boot disabled.
+  - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
+  - Huawei Ascend G7 (huawei-g7)
+  - LG K10 (lg-m216)
+  - Xiaomi Redmi 2 (wingtech-wt88047)
+
+**Snapdragon 615 (MSM8939):**
+  - Huawei Honor 5X (huawei-kiwi)
 
 However, further research has shown that missing validation in Qualcomm's TZ firmware
 can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
