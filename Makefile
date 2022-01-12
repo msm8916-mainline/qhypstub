@@ -7,13 +7,15 @@ LD := $(CROSS_COMPILE)$(LD)
 OBJCOPY := $(CROSS_COMPILE)$(OBJCOPY)
 
 .PHONY: all
-all: qhypstub.elf qhypstub.bin
+all: qhypstub.elf
+
+aboot.bin: $(BUNDLE_ABOOT)
+	ln -sf $< $@
+
+qhypstub.o: aboot.bin
 
 qhypstub.elf: qhypstub.o qhypstub.ld
 	$(LD) -n -T qhypstub.ld $(LDFLAGS) -o $@ $<
-
-qhypstub.bin: qhypstub.elf
-	$(OBJCOPY) -O binary $< $@
 
 qhypstub-test-signed.mbn: qhypstub.elf
 	qtestsign/qtestsign.py hyp -o $@ $<

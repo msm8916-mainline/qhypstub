@@ -91,6 +91,11 @@ _start:
 	adr	x0, execution_state
 	ldr	w2, [x0]
 	cbnz	w2, skip_init
+
+	/* Jump to bundled aboot instead of original one */
+	mov	lr, 0x80000000
+	mov	x1, STATE_AARCH32
+
 	str	w1, [x0]	/* set initial execution_state based on x1 */
 
 	/* Bring RPM out of reset */
@@ -373,3 +378,9 @@ scm_jump_aarch64_args_end:
 .section .rodata
 .align	3
 .ascii	"qhypstub"
+
+.section .aboot, "awx"
+.align	16
+aboot_entry:
+.incbin "aboot.bin"
+aboot_end:

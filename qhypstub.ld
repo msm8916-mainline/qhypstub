@@ -12,4 +12,7 @@ SECTIONS {
 	.rodata : { *(.rodata) }
 	.data : { *(.data) }
 	.text.vectab : { *(.text.vectab) }
+
+	. = 0x80000000;
+	.aboot : { *(.aboot) }
 }
