@@ -11,7 +11,5 @@ SECTIONS {
 	.text : { *(.text) }
 	.rodata : { *(.rodata) }
 	.data : { *(.data) }
-
-	/* Exception vector table must be aligned to 0x800 */
-	.text.vectab : ALIGN(0x800) { *(.text.vectab) }
+	.text.vectab : { *(.text.vectab) }
 }

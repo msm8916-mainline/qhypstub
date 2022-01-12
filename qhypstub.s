@@ -313,6 +313,7 @@ smc_invalid:
 \label:
 .endm
 
+.align	11	/* Exception vector table must be aligned to 0x800 */
 el2_vector_table:
 	excvec	el2_sp0_sync
 	b	panic
