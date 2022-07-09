@@ -38,11 +38,21 @@ It has been successfully tested on the following devices:
     - **Note:** Only some hardware revisions have secure boot disabled.
   - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
   - Huawei Ascend G7 (huawei-g7)
+  - 
   - LG K10 (lg-m216)
   - Xiaomi Redmi 2 (wingtech-wt88047)
 
 **Snapdragon 615 (MSM8939):**
   - Huawei Honor 5X (huawei-kiwi)
+  - 
+**Huawei devices using Qualcomm chipsets:**
+
+ - Most of the Huawei devices using Qualcomm chipsets have disabled secure boot
+ - Such as honor 5x ,huawei g7, Huawei mediapad T1 ,huawei g6
+ - How to know whether secure boot is disabled:
+ - download or extract your device's sbl1.mbn/sbl1.img/aboot.img/emmc_appsboot.mbn , open it with notepad , look at the starting lines .
+ - If no signing or certificate found or only shows "Generated" and  "Test signing" or "Test keys" ,that means secure boot is disabled.
+ - If you can find the oem info on the starting lines , that means secure boot is disabled.
 
 However, further research has shown that missing validation in Qualcomm's TZ firmware
 can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
