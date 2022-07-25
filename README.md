@@ -52,7 +52,7 @@ It has been successfully tested on the following devices:
  - How to know whether secure boot is disabled:
  - download or extract your device's sbl1.mbn/sbl1.img/aboot.img/emmc_appsboot.mbn , open it with notepad , look at the starting lines .
  - If no signing or certificate found or only shows "Generated" and  "Test signing" or "Test keys" ,that means secure boot is disabled.
- - If you can find the oem info on the starting lines , that means secure boot is disabled.
+ - If you can find the oem info on the starting lines , that means secure boot is enabled.
 
 However, further research has shown that missing validation in Qualcomm's TZ firmware
 can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
