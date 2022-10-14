@@ -12,9 +12,10 @@ The following Qualcomm SoCs are known to work so far:
   - Snapdragon 615 (MSM8939)
 
 The same or similar approaches could likely work for many more similar SoCs from
-Qualcomm (assuming the devices actually allow using custom firmware).
+Qualcomm (assuming the devices actually allow using custom hypervisor firmware).
 
-Overall, it has the following advantages compared to the original firmware from Qualcomm:
+**Advantages compared to the original firmware from Qualcomm:**
+
 - Boot [Linux]/KVM or other operating systems in EL2 to enable virtualization functionality
 - Directly boot 64-bit bootloaders without going through 32-bit [LK (Little Kernel)]
   - This works partially also with Qualcomm's `hyp` firmware, but breaks SMP/CPUidle there
@@ -23,38 +24,8 @@ Overall, it has the following advantages compared to the original firmware from 
 - Open-source
 - Minimal runtime overhead (written entirely in assembly, 4 KiB of RAM required)
 
-Given that [qhypstub] is mostly based on trial and error - assembling it step by step
-until most things were working (see commit log) - it is hard to say if there are any
-disadvantages (i.e. features broken when using qhypstub because it is missing
-some functionality). I was not able to find any broken functionality so far.
+**Supported operating systems:**
 
-## Tested devices
-[qhypstub] is primarily intended for devices that have **secure boot disabled**.
-It has been successfully tested on the following devices:
-
-**Snapdragon 410 (MSM8916/APQ8016):**
-  - DragonBoard 410c (db410c/apq8016-sbc)
-  - Alcatel Idol 3 (4.7) (alcatel-idol347)
-    - **Note:** Only some hardware revisions have secure boot disabled.
-  - BQ Aquaris X5 (paella/picmt/longcheer-l8910)
-  - Huawei Ascend G7 (huawei-g7)
-  - LG K10 (lg-m216)
-  - Xiaomi Redmi 2 (wingtech-wt88047)
-
-**Snapdragon 615 (MSM8939):**
-  - Huawei Honor 5X (huawei-kiwi)
-
-However, further research has shown that missing validation in Qualcomm's TZ firmware
-can be "abused" to replace the entire `hyp` firmware at runtime. This can be used to
-load [qhypstub] even on devices with **enabled secure boot**, provided that it is
-possible to load custom kernels in EL1. So far it seems that this approach can be
-successfully used on almost **all devices** based on one of the following Qualcomm SoCs:
-
-  - Snapdragon 410 (MSM8916/APQ8016)
-  - Snapdragon 615 (MSM8939)
-
-It is designed to be a true drop-in replacement for the original `hyp` firmware,
-and therefore supports all of the following usage scenarios:
 
 - primary aarch64 bootloader (e.g. [U-Boot]) - started directly in EL2
 - primary aarch32 bootloader (e.g. [LK (Little Kernel)]) - started in EL1
@@ -62,7 +33,22 @@ and therefore supports all of the following usage scenarios:
   - OS started in aarch64 EL1: happens only when patch in LK is missing
   - OS started in aarch32 EL1 (e.g. original 32-bit Linux 3.10 kernel from Qualcomm)
 
+**NOTE:** Replacing Qualcomm's hypervisor might break certain functionality and could have security implications.
+Unfortunately, the responsibilities of the hypervisor in Qualcomm's system design are not clearly documented,
+so [qhypstub] only implements the minimal functionality to make the device boot correctly.
+
 ## Installation
+[qhypstub] is intended to be a drop-in replacement that is installed to the `hyp` partition (replacing the original
+firmware from Qualcomm completely). However, this works only if the device has **secure boot disabled** and allows
+using custom firmware. It is not entirely straightforward to check if this is the case:
+
+- Firmware secure boot is completely unrelated to "bootloader unlocking" (which allows flashing custom Android
+  boot images). Most Qualcomm devices available on the market have firmware secure boot enabled permanently,
+  without a way to disable it.
+- Some devices have "partial" secure boot, where only some of the firmware can be replaced.
+
+If in doubt, assume that your device has secure boot enabled.
+
 ### Devices without secure boot
 **WARNING:** The `hyp` firmware runs before the bootloader that provides the Fastboot interface. Be prepared to recover
 your board using other methods (e.g. EDL) in case of trouble. DO NOT INSTALL IT IF YOU DO NOT KNOW HOW TO RECOVER YOUR BOARD!
@@ -73,16 +59,12 @@ After [building](#building) qhypstub and signing it, it is simply flashed to the
 $ fastboot flash hyp qhypstub-test-signed.mbn
 ```
 
-**WARNING:** `qhypstub-test-signed.mbn` **works only on devices with secure boot disabled**.
-Firmware secure boot is separate from the secure boot e.g. in Android bootloaders
-(for flashing custom Android boot images or kernels). Unfortunately, it is enabled
-on most production devices and (theoretically) cannot be unlocked. In that case,
-flashing [qhypstub] to the `hyp` partition will prevent your device from booting!
+**WARNING:** `qhypstub-test-signed.mbn` **works only on devices without secure boot**.
 
 ### Devices with secure boot
 [lk2nd] is a fork of Qualcomm's open-source [LK (Little Kernel)] that can be packaged
 into an Android boot image. This makes it easy to load it even on devices with enabled
-secure boot (where the original bootloader (`aboot`) can not easily be replaced).
+secure boot, where the original bootloader (`aboot`) can not easily be replaced.
 
 [lk2nd] supports a large number of devices based on MSM8916/MSM8939. It also contains
 an implementation that abuses missing validation in some SCM/SMC calls of Qualcomm's
@@ -120,7 +102,7 @@ $ make CROSS_COMPILE=aarch64-linux-gnu-
 ```
 
 Even on devices without secure boot, the resulting ELF file must be signed with automatically generated test keys.
-To do that, you can use [qtestsign], which will produce the `qhypstub-test-signed.mbn` that you flash to your device.
+You can use [qtestsign], which will produce the `qhypstub-test-signed.mbn` that you flash to your device.
 
 ```
 $ ./qtestsign.py hyp qhypstub.elf
