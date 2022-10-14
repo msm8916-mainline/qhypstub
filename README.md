@@ -16,10 +16,10 @@ Qualcomm (assuming the devices actually allow using custom firmware).
 
 Overall, it has the following advantages compared to the original firmware from Qualcomm:
 - Boot [Linux]/KVM or other operating systems in EL2 to enable virtualization functionality
-- Directly boot [U-Boot] (or another aarch64 bootloader), without going through aarch32 [LK (Little Kernel)]
+- Directly boot 64-bit bootloaders without going through 32-bit [LK (Little Kernel)]
   - This works partially also with Qualcomm's `hyp` firmware, but breaks SMP/CPUidle there
-    due to a bug in the proprietary PSCI implementation (part of TrustZone/TZ). [qhypstub]
-    contains a workaround that avoids the problem.
+    due to a bug in the proprietary PSCI implementation (part of TrustZone/TZ).
+  - The workaround from qhypstup was also [ported to U-Boot](https://source.denx.de/u-boot/u-boot/-/commit/0204d1b56b2fa681d9f47c2fed0c626d48429151).
 - Open-source
 - Minimal runtime overhead (written entirely in assembly, 4 KiB of RAM required)
 
